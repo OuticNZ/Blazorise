@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Blazorise.Stores;
 using Microsoft.AspNetCore.Components;
 #endregion
 
@@ -12,9 +13,9 @@ namespace Blazorise
     {
         #region Members
 
-        private bool visible;
+        private BarItemStore parentStore;
 
-        public event EventHandler<BarDropdownStateEventArgs> StateChanged;
+        private BarDropdownStore store;
 
         #endregion
 
@@ -22,8 +23,8 @@ namespace Blazorise
 
         protected override void BuildClasses( ClassBuilder builder )
         {
-            builder.Append( ClassProvider.BarDropdown() );
-            builder.Append( ClassProvider.BarDropdownShow(), Visible );
+            builder.Append( ClassProvider.BarDropdown( Store.Mode ) );
+            builder.Append( ClassProvider.BarDropdownShow( Store.Mode ), Store.Visible );
 
             base.BuildClasses( builder );
         }
@@ -31,45 +32,34 @@ namespace Blazorise
         protected override void OnInitialized()
         {
             // link to the parent component
-            BarItem?.Hook( this );
+            ParentBarItem?.Hook( this );
+
+            if ( parentStore.Mode != BarMode.VerticalSmall )
+                Visible = Open;
 
             base.OnInitialized();
         }
 
-        public void Show()
+        internal void Show()
         {
-            var temp = Visible;
-
             Visible = true;
 
-            if ( temp != Visible ) // used to prevent toggle event call if Open() is called multiple times
-                Toggled?.Invoke( Visible );
-
-            BarItem?.MenuChanged();
-
             StateHasChanged();
         }
 
-        public void Hide()
+        internal void Hide()
         {
-            var temp = Visible;
-
             Visible = false;
 
-            if ( temp != Visible ) // used to prevent toggle event call if Close() is called multiple times
-                Toggled?.Invoke( Visible );
-
-            BarItem?.MenuChanged();
-
             StateHasChanged();
         }
 
-        public void Toggle()
+        internal void Toggle()
         {
-            Visible = !Visible;
-            Toggled?.Invoke( Visible );
+            if ( Store.Mode == BarMode.VerticalSmall )
+                return;
 
-            BarItem?.MenuChanged();
+            Visible = !Visible;
 
             StateHasChanged();
         }
@@ -78,30 +68,51 @@ namespace Blazorise
 
         #region Properties
 
+        protected BarDropdownStore Store => store;
+
         /// <summary>
-        /// Gets or sets a value indicating whether the control and all its child controls are displayed.
+        /// Sets a value indicating whether the control and all its child controls are displayed by default
         /// </summary>
         [Parameter]
+        public bool Open { get; set; }
+
         public bool Visible
         {
-            get => visible;
+            get => store.Visible;
             set
             {
                 // prevent dropdown from calling the same code multiple times
-                if ( value == visible )
+                if ( value == store.Visible )
                     return;
 
-                visible = value;
-
-                StateChanged?.Invoke( this, new BarDropdownStateEventArgs( visible ) );
+                store.Visible = value;
 
                 DirtyClasses();
             }
         }
 
-        [Parameter] public Action<bool> Toggled { get; set; }
+        [CascadingParameter] protected BarItem ParentBarItem { get; set; }
 
-        [CascadingParameter] protected BarItem BarItem { get; set; }
+        [CascadingParameter] 
+        protected BarItemStore ParentStore
+        {
+            get => parentStore;
+            set
+            {
+                if ( parentStore == value )
+                    return;
+
+                parentStore = value;
+
+                store.Mode = parentStore.Mode;
+
+                // Hack for AntDesign..
+                if ( store.Mode == BarMode.VerticalSmall )
+                    Visible = false;
+
+                DirtyClasses();
+            }
+        }
 
         [Parameter] public RenderFragment ChildContent { get; set; }
 
